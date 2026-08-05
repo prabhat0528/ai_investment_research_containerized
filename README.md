@@ -1,8 +1,5 @@
 # 📈 AI-Powered Investment Research Suite
 
-* **GitHub Repository:** [https://github.com/prabhat0528/AI-Investment-Research](https://github.com/prabhat0528/AI-Investment-Research)
-* **Live Deployment:** [https://ai-investment-research-analysis.vercel.app/](https://ai-investment-research-analysis.vercel.app/)
-
 An advanced, enterprise-grade investment intelligence platform combining **conversational financial analysis** and **autonomous multi-agent audit reporting** powered by Google Gemini, LangGraph, and PostgreSQL.
 
 ---
@@ -123,19 +120,14 @@ graph TD
 | Component | Technology |
 | :--- | :--- |
 | **Frontend** | React, TailwindCSS, Vite, Lucide React, React Router |
-| **Backend** | Node.js, Express, PostgreSQL (Neon client) |
+| **Backend** | Node.js, Express, PostgreSQL  |
 | **AI Orchestration** | `@langchain/langgraph`, Google Gemini SDK |
 | **Data Providers** | Finnhub API (Real-time), Yahoo Finance API (Historical & News) |
-| **Deployment** | Vercel  |
+| **Deployment** | Docker  |
 
 ---
 
-## 💬 My Chats with AI
 
-To explore the conceptual roadmap, pair-programming thought process, and architectural decisions made while developing this project, check out the chat transcript:
-* 🔗 [Investment Research Agent Project Design Chat](https://chatgpt.com/c/6a48fa48-328c-83e8-84f1-4de73b02b174) — A transcript detailing how we conceptualized, debugged, and optimized the suite.
-
----
 
 ## 🐳 Local Containerization (Docker & Docker Compose)
 
@@ -163,8 +155,8 @@ This project is fully containerized to run locally with a dedicated PostgreSQL d
    ```
 
 3. **Access the Terminal:**
-   * **Frontend Terminal:** Open `http://localhost:3000` in your web browser.
-   * **Backend API Health Check:** Open `http://localhost:5000/health` to confirm the backend is running.
+   * **Frontend Terminal:** Open `http://localhost:3001` in your web browser.
+   * **Backend API Health Check:** Open `http://localhost:5005/health` to confirm the backend is running.
    * **PostgreSQL Database:** Exposes port `5432` locally for database management tools (e.g. pgAdmin or DBeaver) using username/password `postgres/postgres` and database `quantterminal`.
 
 4. **Shutdown Containers:**
