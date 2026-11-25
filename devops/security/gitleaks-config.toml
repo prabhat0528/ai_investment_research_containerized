@@ -1,0 +1,37 @@
+# Gitleaks Configuration for AI Investment Research Suite
+# Enforces automated scanning for leaked API keys, tokens, and credentials
+
+title = "AI Investment Security Rules"
+
+[allowlist]
+description = "Allowed non-sensitive placeholder variables and test tokens"
+paths = [
+  '''.env.example''',
+  '''package-lock.json''',
+  '''pnpm-lock.yaml'''
+]
+
+[[rules]]
+description = "Google Gemini / AI Studio API Key"
+id = "gemini-api-key"
+regex = '''(?i)(AIza[0-9A-Za-z\\-_]{35})'''
+tags = ["key", "Google", "Gemini"]
+
+[[rules]]
+description = "Finnhub Financial Market API Key"
+id = "finnhub-api-key"
+regex = '''(?i)(finnhub[a-z0-9_]*|FINNHUB_API_KEY)[\\s]*[=:][\\s]*["']?([a-zA-Z0-9]{16,40})["']?'''
+tags = ["key", "Finnhub"]
+
+[[rules]]
+description = "AWS Access Key ID"
+id = "aws-access-key-id"
+regex = '''(A3T[A-Z0-9]|AKIA[A-Z0-9]|AGPA[A-Z0-9]|AIDA[A-Z0-9]|AROA[A-Z0-9]|AIPA[A-Z0-9]|ANPA[A-Z0-9]|ANVA[A-Z0-9]|ASIA[A-Z0-9])[A-Z0-9]{16}'''
+tags = ["key", "AWS"]
+
+[[rules]]
+description = "Generic High-Entropy Private Key / Secret"
+id = "generic-api-secret"
+regex = '''(?i)(api_key|apikey|secret_key|secret|password|auth_token)[\\s]*[=:][\\s]*["']?([a-zA-Z0-9_\\-@#\$%^&*]{8,64})["']?'''
+entropy = 3.5
+tags = ["generic", "secret"]

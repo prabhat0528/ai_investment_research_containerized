@@ -1,0 +1,136 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_CREDS = credentials('dockerhub-credentials-id')
+        DOCKERHUB_USER  = 'prabhatrai05'
+        BACKEND_IMAGE   = "${DOCKERHUB_USER}/ai-investment-backend"
+        FRONTEND_IMAGE  = "${DOCKERHUB_USER}/ai-investment-frontend"
+        EC2_IP          = 'your-ec2-public-ip'
+        EC2_USER        = 'ubuntu'
+        SSH_KEY_CREDS   = credentials('ec2-ssh-key-id')
+        TRIVY_SEVERITY  = 'HIGH,CRITICAL'
+    }
+
+    stages {
+        stage('Checkout SCM') {
+            steps {
+                echo "Checking out latest commit from GitHub repository..."
+                checkout scm
+            }
+        }
+
+        stage('DevSecOps: Secret Scanning') {
+            steps {
+                echo "Running Gitleaks secret detection..."
+                sh 'docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect --source="/path" --config-path="/path/devops/security/gitleaks-config.toml" --verbose || true'
+            }
+        }
+
+        stage('DevSecOps: Dependency SAST') {
+            steps {
+                echo "Running npm audit for known vulnerabilities..."
+                dir('backend') {
+                    sh 'npm audit --audit-level=high || true'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    echo "Building Production Backend Image..."
+                    sh "docker build -t ${BACKEND_IMAGE}:latest -t ${BACKEND_IMAGE}:${BUILD_NUMBER} ./backend"
+
+                    echo "Building Production Frontend Image..."
+                    sh "docker build -t ${FRONTEND_IMAGE}:latest -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} ./frontend"
+                }
+            }
+        }
+
+        stage('DevSecOps: Trivy Container Vulnerability Scan') {
+            steps {
+                script {
+                    echo "Scanning built images with Trivy..."
+                    sh """
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image \
+                        --severity ${TRIVY_SEVERITY} \
+                        --exit-code 0 \
+                        --format table \
+                        ${BACKEND_IMAGE}:latest
+                    """
+                    sh """
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image \
+                        --severity ${TRIVY_SEVERITY} \
+                        --exit-code 0 \
+                        --format table \
+                        ${FRONTEND_IMAGE}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Push to Docker Hub Registry') {
+            steps {
+                script {
+                    echo "Authenticating with Docker Hub..."
+                    sh 'echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin'
+                    
+                    echo "Pushing Backend Image Tags..."
+                    sh "docker push ${BACKEND_IMAGE}:latest"
+                    sh "docker push ${BACKEND_IMAGE}:${BUILD_NUMBER}"
+
+                    echo "Pushing Frontend Image Tags..."
+                    sh "docker push ${FRONTEND_IMAGE}:latest"
+                    sh "docker push ${FRONTEND_IMAGE}:${BUILD_NUMBER}"
+
+                    sh 'docker logout'
+                }
+            }
+        }
+
+        stage('Deploy to AWS EC2 via SSH') {
+            steps {
+                sshagent([SSH_KEY_CREDS]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << 'EOF'
+                        mkdir -p ~/app
+                        cd ~/app
+                        
+                        echo "Pulling latest production images from Docker Hub..."
+                        docker compose -f docker-compose.prod.yml pull backend frontend
+                        
+                        echo "Restarting services with zero downtime..."
+                        docker compose -f docker-compose.prod.yml up -d --remove-orphans
+                        
+                        echo "Cleaning up dangling images..."
+                        docker image prune -f
+                    EOF
+                    """
+                }
+            }
+        }
+
+        stage('Telemetry & Health Smoke Verification') {
+            steps {
+                echo "Verifying backend health endpoint..."
+                sh "curl --retry 5 --retry-delay 5 --retry-connrefused http://${EC2_IP}:5005/health"
+
+                echo "Verifying Prometheus metric scraping endpoint..."
+                sh "curl --retry 5 --retry-delay 5 --retry-connrefused http://${EC2_IP}:5005/metrics | head -n 20"
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "DevSecOps CI/CD Pipeline succeeded! Production deployment verified."
+        }
+        failure {
+            echo "Pipeline failed! Check stage output for error details."
+        }
+    }
+}

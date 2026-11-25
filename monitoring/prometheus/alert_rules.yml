@@ -1,0 +1,37 @@
+groups:
+  - name: InfrastructureAndApplicationAlerts
+    rules:
+      - alert: BackendServiceDown
+        expr: up{job="backend-api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI Investment Research Backend API is DOWN"
+          description: "Backend container has been unreachable for more than 30 seconds."
+
+      - alert: HostHighCpuLoad
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host High CPU utilization (> 85%)"
+          description: "EC2 Host CPU usage is above 85%."
+
+      - alert: HighHttpErrorRate
+        expr: sum(rate(investment_agent_http_requests_total{status_code=~"5.."}[5m])) / sum(rate(investment_agent_http_requests_total[5m])) * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP 5xx Error Rate (> 5%)"
+          description: "Backend is returning more than 5% 5xx server errors."
+
+      - alert: SlowApiResponseTime
+        expr: histogram_quantile(0.95, sum(rate(investment_agent_http_request_duration_seconds_bucket[5m])) by (le)) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th percentile API response time is above 3 seconds"

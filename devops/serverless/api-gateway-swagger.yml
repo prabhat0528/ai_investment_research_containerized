@@ -1,0 +1,52 @@
+openapi: 3.0.1
+info:
+  title: AI Investment Research Serverless API
+  description: Public API Gateway endpoint for fast serverless valuation and ticker auditing
+  version: 1.0.0
+paths:
+  /valuation:
+    post:
+      summary: Fast DCF Valuation Estimation
+      operationId: calculateValuation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ticker:
+                  type: string
+                  example: AAPL
+                eps:
+                  type: number
+                  example: 6.5
+                growth_rate:
+                  type: number
+                  example: 0.08
+                price:
+                  type: number
+                  example: 185.0
+      responses:
+        '200':
+          description: Successful intrinsic valuation calculation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticker:
+                    type: string
+                  intrinsic_value_dcf:
+                    type: number
+                  margin_of_safety_pct:
+                    type: number
+                  serverless_recommendation:
+                    type: string
+        '400':
+          description: Invalid request parameters
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ValuationLambdaFunction.Arn}/invocations
+        httpMethod: POST
+        type: aws_proxy

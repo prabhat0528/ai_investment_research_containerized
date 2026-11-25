@@ -1,0 +1,275 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation Production Stack for AI Investment Research Suite.
+  Provisions a custom VPC, Public Subnet, Security Groups, IAM Roles, S3 Bucket,
+  and an EC2 Docker Host with automated UserData bootstrapping.
+
+Parameters:
+  EnvironmentName:
+    Description: Environment stage identifier
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+
+  InstanceType:
+    Description: EC2 Instance type (t2.micro for Free Tier, t3.small for production workloads)
+    Type: String
+    Default: t3.small
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: ai-investment-key
+
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
+
+Resources:
+  # 1. Custom VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-investment-vpc-${EnvironmentName}"
+
+  # 2. Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-investment-igw-${EnvironmentName}"
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # 3. Public Subnet
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-investment-public-subnet-${EnvironmentName}"
+
+  # 4. Route Table and Default Route
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-investment-public-rt-${EnvironmentName}"
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  # 5. Application Security Group
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for AI Investment Research suite and observability
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+          Description: SSH Administration
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP Frontend Access
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS SSL Access
+        - IpProtocol: tcp
+          FromPort: 5005
+          ToPort: 5005
+          CidrIp: 0.0.0.0/0
+          Description: Backend REST API Access
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          CidrIp: 0.0.0.0/0
+          Description: Alternative Frontend Preview
+        - IpProtocol: tcp
+          FromPort: 3002
+          ToPort: 3002
+          CidrIp: 0.0.0.0/0
+          Description: Grafana Observability Dashboard
+        - IpProtocol: tcp
+          FromPort: 9090
+          ToPort: 9090
+          CidrIp: !Ref SSHLocation
+          Description: Prometheus Server
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-investment-sg-${EnvironmentName}"
+
+  # 6. S3 Bucket for Research Reports and Transcripts
+  ReportStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "ai-investment-reports-${EnvironmentName}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveToGlacierAfter90Days
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+            ExpirationInDays: 365
+      Tags:
+        - Key: Name
+          Value: ai-investment-report-storage
+
+  # 7. IAM Role & Instance Profile for EC2
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: S3AndCloudWatchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ReportStorageBucket.Arn
+                  - !Sub "${ReportStorageBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # 8. EC2 Application & Docker Host
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref ApplicationSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      ImageId: ami-0c7217cdde317cfec # Ubuntu 24.04 LTS (us-east-1 Canonical Noble)
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 25
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          apt-get update -y
+          apt-get install -y ca-certificates curl gnupg lsb-release git
+
+          # Install Docker Engine
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+          apt-get update -y
+          apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+          usermod -aG docker ubuntu
+          systemctl enable docker
+          systemctl start docker
+
+          # Create application working directory
+          mkdir -p /home/ubuntu/app
+          chown -R ubuntu:ubuntu /home/ubuntu/app
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-investment-cfn-host-${EnvironmentName}"
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref PublicSubnet
+
+  EC2PublicIP:
+    Description: Public IP of the Docker host
+    Value: !GetAtt EC2Instance.PublicIp
+
+  WebFrontendURL:
+    Description: Frontend Web Application URL
+    Value: !Sub "http://${EC2Instance.PublicIp}"
+
+  GrafanaURL:
+    Description: Grafana Observability Dashboard URL
+    Value: !Sub "http://${EC2Instance.PublicIp}:3002"
+
+  BackendAPIURL:
+    Description: Backend API endpoint
+    Value: !Sub "http://${EC2Instance.PublicIp}:5005"
+
+  S3BucketName:
+    Description: Name of S3 storage bucket for reports
+    Value: !Ref ReportStorageBucket

@@ -362,7 +362,7 @@ export default function Dashboard({
           <div className="max-w-6xl mx-auto space-y-6">
             
             {/* Top Stats Overview Card */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
               
               {/* Decision Gauge */}
               <div className="glass-panel p-6 rounded-3xl border border-slate-200 dark:border-white/5 flex flex-col justify-between shadow-md">
@@ -384,59 +384,86 @@ export default function Dashboard({
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">({activeReport.ticker})</p>
                 </div>
-                <div className="my-6">
+                <div className="my-3.5">
                   {getDecisionBadge(activeReport.decision)}
                 </div>
-                <div className="text-sm text-slate-955 dark:text-slate-200 border-t border-slate-200 dark:border-white/5 pt-3 leading-relaxed">
-                  <strong>Thesis:</strong> {activeReport.reasoning}
+                <div className="mt-auto border-t border-slate-200 dark:border-white/5 pt-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">
+                    Core Thesis
+                  </span>
+                  <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-h-24 overflow-y-auto pr-1">
+                    {activeReport.reasoning}
+                  </div>
                 </div>
               </div>
 
               {/* Key Ratios Dashboard */}
               <div className="glass-panel p-6 rounded-3xl border border-slate-200 dark:border-white/5 flex flex-col justify-between shadow-md lg:col-span-2">
-                <div>
+                <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                     Key Performance Metrics & Market Trend
                   </span>
+                  <span className="text-[10px] font-medium text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Live Telemetry
+                  </span>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-6 my-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-3 mb-3">
                   {/* Left Column: 4 Metrics Grid */}
-                  <div className="md:col-span-3 grid grid-cols-2 gap-4">
+                  <div className="md:col-span-3 grid grid-cols-2 gap-3">
                     {/* Metric 1: PE */}
-                    <div className="p-4 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200">
-                      <div className="text-xs font-medium text-slate-400">P/E Ratio</div>
-                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                        {activeReport.reportSections?.metrics?.peRatio !== undefined && activeReport.reportSections?.metrics?.peRatio !== null
-                          ? Number(activeReport.reportSections.metrics.peRatio).toFixed(2)
-                          : 'N/A'}
+                    <div className="p-3.5 bg-slate-100/70 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200 flex flex-col justify-center">
+                      <div className="text-[11px] font-medium text-slate-400">P/E Ratio</div>
+                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                        {(() => {
+                          const val = activeReport.reportSections?.metrics?.peRatio;
+                          if (val === undefined || val === null || val === 'N/A') return 'N/A';
+                          const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+                          return isNaN(num) ? 'N/A' : num.toFixed(2);
+                        })()}
                       </div>
                     </div>
                     {/* Metric 2: ROE */}
-                    <div className="p-4 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200">
-                      <div className="text-xs font-medium text-slate-400">ROE</div>
-                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                        {activeReport.reportSections?.metrics?.roe !== undefined && activeReport.reportSections?.metrics?.roe !== null
-                          ? `${(Number(activeReport.reportSections.metrics.roe) * 100).toFixed(2)}%`
-                          : 'N/A'}
+                    <div className="p-3.5 bg-slate-100/70 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200 flex flex-col justify-center">
+                      <div className="text-[11px] font-medium text-slate-400">ROE</div>
+                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                        {(() => {
+                          const val = activeReport.reportSections?.metrics?.roe;
+                          if (val === undefined || val === null || val === 'N/A') return 'N/A';
+                          let num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+                          if (isNaN(num)) return 'N/A';
+                          if (Math.abs(num) > 2.0) num = num / 100.0;
+                          return `${(num * 100).toFixed(2)}%`;
+                        })()}
                       </div>
                     </div>
                     {/* Metric 3: Debt/Equity */}
-                    <div className="p-4 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200">
-                      <div className="text-xs font-medium text-slate-400">Debt to Equity</div>
-                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                        {activeReport.reportSections?.metrics?.debtToEquity !== undefined && activeReport.reportSections?.metrics?.debtToEquity !== null
-                          ? Number(activeReport.reportSections.metrics.debtToEquity).toFixed(2)
-                          : 'N/A'}
+                    <div className="p-3.5 bg-slate-100/70 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200 flex flex-col justify-center">
+                      <div className="text-[11px] font-medium text-slate-400">Debt to Equity</div>
+                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                        {(() => {
+                          const val = activeReport.reportSections?.metrics?.debtToEquity;
+                          if (val === undefined || val === null || val === 'N/A') return 'N/A';
+                          let num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+                          if (isNaN(num)) return 'N/A';
+                          if (num > 20.0) num = num / 100.0;
+                          return num.toFixed(2);
+                        })()}
                       </div>
                     </div>
                     {/* Metric 4: Profit Margin */}
-                    <div className="p-4 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200">
-                      <div className="text-xs font-medium text-slate-400">Profit Margin</div>
-                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                        {activeReport.reportSections?.metrics?.profitMargin !== undefined && activeReport.reportSections?.metrics?.profitMargin !== null
-                          ? `${(Number(activeReport.reportSections.metrics.profitMargin) * 100).toFixed(2)}%`
-                          : 'N/A'}
+                    <div className="p-3.5 bg-slate-100/70 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 hover:scale-[1.02] transition-transform duration-200 flex flex-col justify-center">
+                      <div className="text-[11px] font-medium text-slate-400">Profit Margin</div>
+                      <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                        {(() => {
+                          const val = activeReport.reportSections?.metrics?.profitMargin;
+                          if (val === undefined || val === null || val === 'N/A') return 'N/A';
+                          let num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+                          if (isNaN(num)) return 'N/A';
+                          if (Math.abs(num) > 1.0) num = num / 100.0;
+                          return `${(num * 100).toFixed(2)}%`;
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -447,7 +474,7 @@ export default function Dashboard({
                   </div>
                 </div>
 
-                <div className="text-[10px] text-slate-400 border-t border-slate-200 dark:border-white/5 pt-3 flex items-center space-x-1.5 shrink-0">
+                <div className="text-[10px] text-slate-400 border-t border-slate-200 dark:border-white/5 pt-2.5 flex items-center space-x-1.5 shrink-0 mt-auto">
                   <Info className="w-3.5 h-3.5 text-blue-400" />
                   <span>Metrics compiled from SEC EDGAR & Yahoo Finance quarterly statements.</span>
                 </div>
