@@ -75,9 +75,6 @@ pipeline {
     }
 
     post {
-        always {
-            cleanWs()
-        }
         success {
             echo "CI/CD Pipeline executed successfully! New images deployed on EC2."
         }
